@@ -1,0 +1,9 @@
+{
+  "name": "jyotish-sarathi-kundali-download",
+  "version": "6.0.0",
+  "private": true,
+  "description": "Distribution channel for jyotishsarathi macOS (.dmg) and Windows (.exe) binaries.",
+  "scripts": {
+    "release": "bash scripts/publish.sh"
+  }
+}
