@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 #
-# Publish the latest binaries WITHOUT bloating git history.
+# Publish the latest binaries as a GitHub Release.
 #
-# Drop the new jyotishsarathi.dmg / jyotishsarathi.exe into latest/macos /
-# latest/windows (and bump VERSION), then run `npm run release`. This rewrites
-# history into a single commit so old binary versions never accumulate, then
-# force-pushes to origin/main.
+# Binaries are NOT committed to git: GitHub rejects files over 100 MB, and
+# release assets allow up to 2 GB with no bandwidth cap. Download links under
+# https://github.com/<owner>/<repo>/releases/latest/download/<file> always
+# resolve to the newest published release, so they stay stable across versions.
+#
+# Usage: drop jyotishsarathi.dmg / jyotishsarathi.msi / jyotishsarathi.exe into
+# latest/macos / latest/windows, bump VERSION, commit, then `npm run release`.
 #
 set -euo pipefail
 
@@ -13,27 +16,34 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="$(cat VERSION)"
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-TMP="_publish_$$"
+TAG="v${VERSION}"
 
-echo "==> Publishing v${VERSION} (branch: ${BRANCH})"
+ASSETS=(
+  latest/macos/jyotishsarathi.dmg
+  latest/windows/jyotishsarathi.msi
+  latest/windows/jyotishsarathi.exe
+)
 
-# Build a fresh single-commit history containing only the current files.
-git checkout --orphan "${TMP}"
-git add -A
-git commit -q -m "Latest jyotishsarathi binaries (macOS + Windows) — v${VERSION}"
+for f in "${ASSETS[@]}"; do
+  if [[ ! -f "$f" ]]; then
+    echo "error: missing asset $f" >&2
+    exit 1
+  fi
+done
 
-# Replace the working branch with the squashed commit.
-git branch -f "${BRANCH}" "${TMP}"
-git checkout -q "${BRANCH}"
-git branch -D "${TMP}"
+if gh release view "${TAG}" >/dev/null 2>&1; then
+  echo "error: release ${TAG} already exists. Bump VERSION or delete it with: gh release delete ${TAG}" >&2
+  exit 1
+fi
 
-# Force-push the rewritten history.
-git push --force-with-lease origin "${BRANCH}"
+echo "==> Publishing ${TAG}"
 
-# Reclaim local space by dropping the now-unreachable old binary blobs.
-git reflog expire --expire=now --all
-git gc --prune=now --quiet
+gh release create "${TAG}" "${ASSETS[@]}" \
+  --title "${TAG}" \
+  --notes "Jyotish Sarathi ${VERSION} (macOS arm64 dmg, Windows x86_64 msi/exe)" \
+  --latest
 
-echo "==> Done. Repo size:"
-du -sh .git
+echo "==> Done:"
+for f in "${ASSETS[@]}"; do
+  echo "    https://github.com/arjunghimire/jyotish-sarathi-kundali-download/releases/latest/download/$(basename "$f")"
+done
